@@ -444,6 +444,66 @@ namespace Tests.Editor.FBXImporter
             finally { Object.DestroyImmediate(animator.transform.root.gameObject); }
         }
 
+        [TestCase(0f)]
+        [TestCase(12f)]
+        public void Given_MergedFeetOnValidatedGround_When_PinTakesOver_Then_PreservesSupportPlane(float slope)
+        {
+            Animator animator = LoadTargetAnimator();
+            Assert.That(animator, Is.Not.Null);
+            GameObject floor = null;
+            try
+            {
+                Transform left = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform right = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                var driver = new HumanoidFootGoalDriver();
+                Assert.That(driver.TryInitializeCore(animator,
+                    BuildSamples(animator), BuildHipsPositions(animator),
+                    BuildHipsRotations(animator), BuildPlantEstimate(animator),
+                    HumanoidFootContactIntentLabelSet.Empty, animator.humanScale, FrameRate), Is.True);
+                Assert.That(driver.DebugLeftPinArray[20], Is.True);
+
+                Vector3 supportTarget = left.position + Vector3.up * 0.04f;
+                Assert.That(HumanoidLegPoseSolver.TrySolve(
+                    animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg),
+                    animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg), left,
+                    supportTarget, Vector3.right, out float leftError), Is.True);
+                Assert.That(leftError, Is.LessThan(0.0001f));
+                Assert.That(HumanoidLegPoseSolver.TrySolve(
+                    animator.GetBoneTransform(HumanBodyBones.RightUpperLeg),
+                    animator.GetBoneTransform(HumanBodyBones.RightLowerLeg), right,
+                    left.position + Vector3.right * 0.01f, Vector3.right, out float targetError), Is.True);
+                Assert.That(targetError, Is.LessThan(0.0001f));
+                left.rotation = Quaternion.AngleAxis(15f, left.right) * left.rotation;
+                Vector3 supported = left.position;
+                Quaternion supportedRotation = left.rotation;
+
+                floor = new GameObject("검증된 지지면");
+                floor.transform.rotation = Quaternion.AngleAxis(slope, Vector3.forward);
+                floor.transform.position = supported - Vector3.up * 0.1f - floor.transform.up * 0.05f;
+                var collider = floor.AddComponent<BoxCollider>();
+                collider.size = new Vector3(4f, 0.1f, 4f);
+                Physics.SyncTransforms();
+                var ground = new HumanoidGroundResponse();
+                ground.Initialize(animator);
+                Assert.That(ground.TryFindGround(supported, out RaycastHit hit), Is.True);
+                Assert.That(hit.collider, Is.SameAs(collider));
+                driver.CaptureValidatedSupport(true, true);
+
+                Assert.That(driver.TryApply(20f / FrameRate, 1f, Vector3.right, Vector3.right, ground), Is.True);
+                Assert.That(driver.DebugLeftWeight, Is.EqualTo(1f));
+                Assert.That(driver.DebugSeparationWeight, Is.EqualTo(1f));
+                Vector3 goalDelta = driver.DebugLeftSolveGoal - supported;
+                Assert.That(Vector3.Dot(goalDelta, hit.normal), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(Quaternion.Angle(left.rotation, supportedRotation), Is.LessThan(0.05f));
+                Assert.That(Vector3.ProjectOnPlane(goalDelta, hit.normal).magnitude, Is.GreaterThan(0.01f));
+            }
+            finally
+            {
+                if (floor != null) Object.DestroyImmediate(floor);
+                if (animator != null) Object.DestroyImmediate(animator.transform.root.gameObject);
+            }
+        }
+
         [Test]
         public void Given_ValidatedSeparation_When_PinEntersAndReleases_Then_TransitionsContinuously()
         {

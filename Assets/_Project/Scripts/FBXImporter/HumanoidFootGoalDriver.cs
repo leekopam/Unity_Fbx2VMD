@@ -423,9 +423,9 @@ namespace Fbx2Vmd.FBXImporter
             Quaternion goalHipsRotation = _sourceHipsRotations[frame];
             // 골반 드롭은 양다리 공유 — 한쪽이라도 목표가 신장 한계를 넘으면 함께 계산함.
             _left.PrepareGoal(frame, _goals.Samples, goalHipsPosition, goalHipsRotation,
-                _leftFloorRootSpaceY[frame], _leftFloorWorldY[frame], dt, ground);
+                _leftFloorRootSpaceY[frame], _leftFloorWorldY[frame], dt, _separationWeight, ground);
             _right.PrepareGoal(frame, _goals.Samples, goalHipsPosition, goalHipsRotation,
-                _rightFloorRootSpaceY[frame], _rightFloorWorldY[frame], dt, ground);
+                _rightFloorRootSpaceY[frame], _rightFloorWorldY[frame], dt, _separationWeight, ground);
             float pelvisOffset = CalculatePelvisOffset(frame);
             if (Mathf.Abs(pelvisOffset) > 0f)
             {
@@ -774,7 +774,7 @@ namespace Fbx2Vmd.FBXImporter
                 IReadOnlyList<HumanoidFootGoalStream.GoalSample> samples,
                 Vector3 hipsPosition, Quaternion hipsRotation,
                 float floorRootSpaceY, float floorWorldY,
-                float dt, HumanoidGroundResponse ground)
+                float dt, float separationWeight, HumanoidGroundResponse ground)
             {
                 if (SolveWeight <= 0f)
                 {
@@ -901,18 +901,31 @@ namespace Fbx2Vmd.FBXImporter
                     SupportedPosition = Foot.position;
                     _supportedFrame = currentFrame;
                 }
-                if (HasValidatedSupport && Weight < SourceSolveWeight)
+                if (HasValidatedSupport && separationWeight > 0f)
                 {
-                    // 분리가 핀보다 추가한 수직·회전 기여만 제거해 핀 진입·해제를 연속 유지함.
                     float separationFraction = 1f - Weight / SourceSolveWeight;
                     Vector3 supportNormal = Vector3.up;
                     if (ground != null && ground.TryFindGround(SupportedPosition, out RaycastHit supportGround))
+                    {
                         supportNormal = supportGround.normal;
-                    sourceGoal = Vector3.Lerp(sourceGoal, SupportedPosition + Vector3.ProjectOnPlane(
-                        sourceGoal - SupportedPosition, supportNormal), separationFraction);
-                    rawSourceGoal = Vector3.Lerp(rawSourceGoal, SupportedPosition + Vector3.ProjectOnPlane(
-                        rawSourceGoal - SupportedPosition, supportNormal), separationFraction);
-                    goalFrame = Quaternion.Slerp(goalFrame, _supportedFrame, separationFraction);
+                        Vector3 projectedGoal = SupportedPosition + Vector3.ProjectOnPlane(
+                            sourceGoal - SupportedPosition, supportNormal);
+                        // 같은 지지면에서는 핀이 접지 자세를 덮지 않도록 발 모임 가중치만큼 보호함.
+                        if (ground.TryFindGround(projectedGoal, out RaycastHit goalGround) &&
+                            goalGround.collider == supportGround.collider &&
+                            (goalGround.normal - supportNormal).sqrMagnitude <= 0.00000001f &&
+                            Mathf.Abs(Vector3.Dot(goalGround.point - supportGround.point, supportNormal)) <=
+                            Reach * HumanoidFootGrounding.SoleClearancePerHumanScale)
+                            separationFraction = Mathf.Max(separationFraction, separationWeight);
+                    }
+                    if (separationFraction > 0f)
+                    {
+                        sourceGoal = Vector3.Lerp(sourceGoal, SupportedPosition + Vector3.ProjectOnPlane(
+                            sourceGoal - SupportedPosition, supportNormal), separationFraction);
+                        rawSourceGoal = Vector3.Lerp(rawSourceGoal, SupportedPosition + Vector3.ProjectOnPlane(
+                            rawSourceGoal - SupportedPosition, supportNormal), separationFraction);
+                        goalFrame = Quaternion.Slerp(goalFrame, _supportedFrame, separationFraction);
+                    }
                 }
                 Quaternion sourceFrame = Quaternion.Slerp(currentFrame, goalFrame, sourceFraction);
                 LastSolveGoal = Vector3.Lerp(rawSourceGoal, SupportedPosition, SupportWeight);

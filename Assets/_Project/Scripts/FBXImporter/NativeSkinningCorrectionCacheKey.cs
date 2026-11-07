@@ -19,7 +19,7 @@ namespace Fbx2Vmd.FBXImporter
     {
         // 보정 알고리즘·설정이 바뀌면 수동으로 올린다 — 설정은 코드 고정(static)이라
         // 이 상수 하나가 설정 변경 전부를 대표한다.
-        internal const int AlgorithmVersion = 25;
+        internal const int AlgorithmVersion = 26;
 
         internal readonly struct RendererIdentity
         {
