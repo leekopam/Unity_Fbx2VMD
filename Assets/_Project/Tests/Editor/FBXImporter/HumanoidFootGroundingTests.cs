@@ -303,6 +303,25 @@ namespace Tests.Editor.FBXImporter
                     Assert.That(corrected[index].contacts, Is.EqualTo(baseline[index].contacts), $"f{frames[index]}");
                     Assert.That(Measure(frames[index]).height, Is.EqualTo(corrected[index].height).Within(0.00003f));
                 }
+
+                Transform thigh = animator.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+                Transform knee = animator.GetBoneTransform(HumanBodyBones.RightLowerLeg);
+                Transform ankle = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                float MeasureKneeAcceleration(bool suppressTouchdown)
+                {
+                    suppression.SetValue(grounding, suppressTouchdown);
+                    float[] angles = Enumerable.Range(4853, 10).Select(frame =>
+                    {
+                        Measure(frame);
+                        return Vector3.Angle(knee.position - thigh.position, ankle.position - knee.position);
+                    }).ToArray();
+                    return Enumerable.Range(2, angles.Length - 2)
+                        .Max(index => Mathf.Abs(angles[index] - 2f * angles[index - 1] + angles[index - 2]));
+                }
+
+                float baselineKneeAcceleration = MeasureKneeAcceleration(true);
+                Assert.That(MeasureKneeAcceleration(false), Is.LessThanOrEqualTo(baselineKneeAcceleration + 0.01f),
+                    "분수 프레임이 개선돼도 정수 프레임의 오른무릎 급변을 키우면 안 됩니다.");
             }
             finally
             {

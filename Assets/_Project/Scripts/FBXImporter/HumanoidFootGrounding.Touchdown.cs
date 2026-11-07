@@ -147,11 +147,13 @@ namespace Fbx2Vmd.FBXImporter
             private TouchdownPose _previous;
             private TouchdownPose _beforePrevious;
             private TouchdownPose _previousInteger;
+            private Vector2 _previousIntegerKneeStep;
             private int _count;
-            private bool _hasInteger;
+            private int _integerCount;
             private float _maxDrop;
             private float _maxHipAcceleration;
             private float _maxKneeAcceleration;
+            private float _maxIntegerKneeAcceleration;
             private float _maxLeftStep;
             private float _maxRightStep;
 
@@ -168,13 +170,22 @@ namespace Fbx2Vmd.FBXImporter
                 }
                 if (integer)
                 {
-                    if (_hasInteger)
+                    if (_integerCount > 0)
                     {
                         _maxLeftStep = Mathf.Max(_maxLeftStep, Vector3.Distance(_previousInteger.LeftFoot, pose.LeftFoot));
                         _maxRightStep = Mathf.Max(_maxRightStep, Vector3.Distance(_previousInteger.RightFoot, pose.RightFoot));
+                        Vector2 kneeStep = pose.Knees - _previousInteger.Knees;
+                        if (_integerCount > 1)
+                        {
+                            // 분수 표본의 개선이 실제 정수 프레임 사이 급변을 가리지 않게 함.
+                            Vector2 acceleration = kneeStep - _previousIntegerKneeStep;
+                            _maxIntegerKneeAcceleration = Mathf.Max(_maxIntegerKneeAcceleration,
+                                Mathf.Max(Mathf.Abs(acceleration.x), Mathf.Abs(acceleration.y)));
+                        }
+                        _previousIntegerKneeStep = kneeStep;
                     }
                     _previousInteger = pose;
-                    _hasInteger = true;
+                    _integerCount++;
                 }
                 _beforePrevious = _previous;
                 _previous = pose;
@@ -184,10 +195,12 @@ namespace Fbx2Vmd.FBXImporter
             internal bool Improves(TouchdownMotion baseline)
             {
                 const float positionTolerance = 0.000001f;
-                const float angleTolerance = 0.01f / (TouchdownSamplesPerFrame * TouchdownSamplesPerFrame);
+                const float angleTolerance = 0.01f;
+                const float subframeAngleTolerance = angleTolerance / (TouchdownSamplesPerFrame * TouchdownSamplesPerFrame);
                 return _count > 2 && _maxDrop < baseline._maxDrop - positionTolerance &&
                     _maxHipAcceleration <= baseline._maxHipAcceleration + positionTolerance &&
-                    _maxKneeAcceleration <= baseline._maxKneeAcceleration + angleTolerance &&
+                    _maxKneeAcceleration <= baseline._maxKneeAcceleration + subframeAngleTolerance &&
+                    _maxIntegerKneeAcceleration <= baseline._maxIntegerKneeAcceleration + angleTolerance &&
                     _maxLeftStep <= baseline._maxLeftStep + positionTolerance &&
                     _maxRightStep <= baseline._maxRightStep + positionTolerance;
             }
