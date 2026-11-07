@@ -282,6 +282,56 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [TestCase(0, false)]
+        [TestCase(1, false)]
+        [TestCase(0, true)]
+        [TestCase(1, true)]
+        public void Given_TrackedPair_When_SourceTurns_Then_PreservesSoleSpan(int primary, bool movesPrimary)
+        {
+            using (Rig rig = CreateRig(out Transform foot))
+            {
+                const int frameCount = 4;
+                const float trackStep = 0.005f;
+                const float soleSpan = 0.4f;
+                int secondary = 1 - primary;
+                var source = new[] { new Vector3[frameCount], new Vector3[frameCount] };
+                var weights = new[] { Vector2.one, Vector2.one, Vector2.one, Vector2.one };
+                weights[0][secondary] = 0f;
+                for (int frame = 0; frame < frameCount; frame++)
+                {
+                    Vector3 direction = frame < 2 ? Vector3.forward :
+                        Quaternion.AngleAxis(60f, Vector3.up) * Vector3.forward;
+                    float sign = primary == 0 ? 1f : -1f;
+                    Vector3 translation = movesPrimary && frame >= 2 ? Vector3.forward * (sign * 0.1f) : Vector3.zero;
+                    source[primary][frame] = translation;
+                    source[secondary][frame] = translation + direction * (sign * 0.2f);
+                }
+
+                Type planType = typeof(FBXVmdPipeline).Assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.HumanoidFootAnchorPlan", true);
+                object[] args = { foot, rig.Sampler, source, weights, Quaternion.identity,
+                    1f, 60f, frameCount / 60f, new Action<float>(_ => { }),
+                    null, null, null, null, 0f, trackStep };
+                Assert.That(planType.GetMethod("TryBuild", Flags).Invoke(null, args), Is.True);
+                MethodInfo getSample = planType.GetMethod("GetSample", Flags);
+                Vector3 AnchorAt(int channel, float frame)
+                {
+                    object sample = getSample.Invoke(args[9], new object[] { channel, frame });
+                    return (Vector3)sample.GetType().GetField("Anchor", Flags).GetValue(sample);
+                }
+
+                Assert.That(Vector3.Distance(AnchorAt(0, 1f), AnchorAt(1, 1f)),
+                    Is.EqualTo(soleSpan).Within(0.001f), "회전 전에 접촉 쌍이 정합되어야 함");
+                foreach (float frame in new[] { 2f, 2.5f, 3f })
+                    Assert.That(Vector3.Distance(AnchorAt(0, frame), AnchorAt(1, frame)),
+                        Is.EqualTo(soleSpan).Within(0.001f), $"프레임 {frame}에서 밑창 간격이 달라짐");
+                for (int frame = 2; frame < frameCount; frame++)
+                    Assert.That(Vector3.Distance(AnchorAt(secondary, frame - 1), AnchorAt(secondary, frame)),
+                        Is.InRange(0.001f, 4f * trackStep + 0.0001f),
+                        "쌍 간격을 유지하면서 보조 앵커가 이동 상한 안에서 따라가야 함");
+            }
+        }
+
         [Test]
         public void Given_ContactPointIdentityChange_When_Interpolating_Then_SwitchesDiscretely()
         {

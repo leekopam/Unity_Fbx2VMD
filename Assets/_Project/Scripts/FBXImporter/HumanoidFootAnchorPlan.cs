@@ -241,6 +241,8 @@ namespace Fbx2Vmd.FBXImporter
                         pair = null;
                     }
                 }
+                int secondaryChannel = canAlign ? 1 - pair.Primary : -1;
+                Vector3? secondaryStart = null;
                 for (int channel = 0; channel < 2; channel++)
                 {
                     if (states[channel] == null)
@@ -274,7 +276,10 @@ namespace Fbx2Vmd.FBXImporter
                     if (anchorTrackStep > 0f && emittedValid[channel] &&
                         emittedContact[channel] == states[channel] &&
                         preservedPrimary != channel)
+                    {
+                        if (channel == secondaryChannel) secondaryStart = emitted[channel];
                         anchor = MoveEmittedAnchor(emitted[channel], anchor, anchorTrackStep);
+                    }
                     result._frames[channel][frame] =
                         new Frame(states[channel].Point, anchor, canAlign);
                     emitted[channel] = anchor;
@@ -283,6 +288,14 @@ namespace Fbx2Vmd.FBXImporter
                     emittedPoint[channel] = states[channel].Point;
                     emittedFrame[channel] = frame;
                     emittedWeight[channel] = weights[frame][channel];
+                }
+                if (secondaryChannel >= 0 && anchorTrackStep > 0f)
+                {
+                    Vector3 secondary = ConstrainPairAnchor(emitted[pair.Primary], emitted[secondaryChannel],
+                        pair.Offset.magnitude, secondaryStart, anchorTrackStep * AnchorCatchUpStepFactor);
+                    emitted[secondaryChannel] = secondary;
+                    result._frames[secondaryChannel][frame] =
+                        new Frame(states[secondaryChannel].Point, secondary, true);
                 }
             }
             plan = result;
@@ -388,6 +401,35 @@ namespace Fbx2Vmd.FBXImporter
             float step = Mathf.Clamp(Vector3.Distance(emitted, target) * AnchorCatchUpFraction,
                 trackStep, trackStep * AnchorCatchUpStepFactor);
             return Vector3.MoveTowards(emitted, target, step);
+        }
+
+        // 독립 이동 제한으로 줄어든 쌍 간격을 복원하되 보조점은 직전 위치의 이동 상한 안에 둠.
+        private static Vector3 ConstrainPairAnchor(Vector3 primary, Vector3 secondary, float span,
+            Vector3? start, float maximumStep)
+        {
+            Vector3 planar = Vector3.ProjectOnPlane(secondary - primary, Vector3.up);
+            if (planar.sqrMagnitude < 0.00000001f) return secondary;
+            Vector3 center = secondary - planar;
+            Vector3 offset = planar.normalized * span;
+            Vector3 aligned = center + offset;
+            if (!start.HasValue || (aligned - start.Value).sqrMagnitude <= maximumStep * maximumStep)
+                return aligned;
+
+            Vector3 fromCenter = start.Value - center;
+            Vector3 previous = Vector3.ProjectOnPlane(fromCenter, Vector3.up);
+            float previousRadius = previous.magnitude;
+            float planarBudgetSquared = maximumStep * maximumStep - fromCenter.y * fromCenter.y;
+            // 두 원이 접할 때 float 반올림만으로 교집합이 사라지지 않게 함.
+            float closestDistance = Mathf.Max(0f, Mathf.Abs(previousRadius - span) - 0.000001f);
+            // 두 제한의 교집합이 없으면 기존 제한 이동을 유지함.
+            if (previousRadius < 0.0001f || planarBudgetSquared < closestDistance * closestDistance)
+                return secondary;
+            float cosine = (previousRadius * previousRadius + span * span - planarBudgetSquared) /
+                (2f * previousRadius * span);
+            float maximumAngle = Mathf.Acos(Mathf.Clamp(cosine, -1f, 1f)) * Mathf.Rad2Deg;
+            float desiredAngle = Vector3.SignedAngle(previous, offset, Vector3.up);
+            Quaternion turn = Quaternion.AngleAxis(Mathf.Clamp(desiredAngle, -maximumAngle, maximumAngle), Vector3.up);
+            return center + turn * (previous / previousRadius * span);
         }
 
         private void RecordIssue(int frame, string reason)
