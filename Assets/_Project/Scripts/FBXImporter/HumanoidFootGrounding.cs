@@ -756,6 +756,14 @@ namespace Fbx2Vmd.FBXImporter
                             _support < 0.999f || Diagnostic.mixed_ground_collider)
                             continue;
 
+                        // 마지막 지지에서 골반을 내릴 이유가 없는 다리의 해제 궤적은 보존함.
+                        Vector3 targetToHip = Upper.position - _target;
+                        float reachSquared = _maximumReach * _maximumReach;
+                        float horizontalSquared = targetToHip.x * targetToHip.x + targetToHip.z * targetToHip.z;
+                        if (targetToHip.y <= 0f || horizontalSquared >= reachSquared ||
+                            targetToHip.sqrMagnitude <= reachSquared)
+                            continue;
+
                         var reference = new ReleaseReference(frame, channel, contact.FirstPoint,
                             contact.Anchor, _target - _originalFootPosition, _ground);
                         for (int index = frame; index < end; index++)
