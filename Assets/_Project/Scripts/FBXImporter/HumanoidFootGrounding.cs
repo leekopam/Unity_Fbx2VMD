@@ -94,7 +94,7 @@ namespace Fbx2Vmd.FBXImporter
     /// <summary>
     /// 명시적 재생 시각의 지지·밑창 목표와 양다리 도달 보정을 조립함.
     /// </summary>
-    internal sealed class HumanoidFootGrounding : IDisposable
+    internal sealed partial class HumanoidFootGrounding : IDisposable
     {
         private readonly Transform _hips;
         private readonly Leg _left;
@@ -181,6 +181,7 @@ namespace Fbx2Vmd.FBXImporter
             HumanoidFootContactIntentEstimate intents = null)
         {
             IsPrepared = false;
+            _touchdownWindows.Clear();
             if (samples == null || samples.Count < 2 || clip == null || evaluateReference == null ||
                 sourceHumanScale <= 0f || float.IsNaN(sourceHumanScale) || float.IsInfinity(sourceHumanScale))
                 return false;
@@ -223,8 +224,14 @@ namespace Fbx2Vmd.FBXImporter
             _hasAppliedPose = false;
         }
 
-        internal bool TryApply(float timeSeconds, HumanoidGroundResponse ground)
+        internal bool TryApply(float timeSeconds, HumanoidGroundResponse ground) =>
+            TryApplyCore(timeSeconds, ground, null, true, out _, out _);
+
+        private bool TryApplyCore(float timeSeconds, HumanoidGroundResponse ground,
+            TouchdownWindow window, bool applyHold, out bool touchdownRejected, out TouchdownPose baselinePose)
         {
+            touchdownRejected = false;
+            baselinePose = default;
             ResetEvaluationState();
             if (!IsPrepared || _hips == null || ground == null ||
                 float.IsNaN(timeSeconds) || float.IsInfinity(timeSeconds) || timeSeconds < 0f)
@@ -276,7 +283,8 @@ namespace Fbx2Vmd.FBXImporter
                             (releaseClearance.x <= contactLimit) == (clearance.x <= contactLimit) &&
                             (releaseClearance.y <= contactLimit) == (clearance.y <= contactLimit))
                         {
-                            isApplied = ApplyGateHold(true, timeSeconds);
+                            if (!applyHold) baselinePose = ReadTouchdownPose();
+                            isApplied = !applyHold || ApplyGateHold(true, timeSeconds);
                             return isApplied;
                         }
 
@@ -288,7 +296,17 @@ namespace Fbx2Vmd.FBXImporter
                     }
                 }
 
-                isApplied = ApplyGateHold(RawGatePass, timeSeconds);
+                if (!applyHold) baselinePose = ReadTouchdownPose();
+                if (RawGatePass && !SuppressReleaseCorrection)
+                {
+                    if (window == null && applyHold)
+                        _touchdownWindows.TryGetValue(Mathf.FloorToInt(frame), out window);
+                    if (window != null && frame >= window.Start && frame < window.Full &&
+                        !TryApplyTouchdown(window, ground, leftTarget, rightTarget, offset, footOffsets, out touchdownRejected))
+                        return false;
+                }
+
+                isApplied = applyHold ? ApplyGateHold(RawGatePass, timeSeconds) : RawGatePass;
                 return isApplied;
             }
             finally
@@ -507,7 +525,7 @@ namespace Fbx2Vmd.FBXImporter
             return decision;
         }
 
-        private sealed class Leg
+        private sealed partial class Leg
         {
             // 앞꿈치 지지 발끝 하향각 — 25°부터 초과분을 완만히 눌러 35°에 점근시킴.
             private const float ToePitchSoftKneeDeg = 25f;
@@ -757,12 +775,7 @@ namespace Fbx2Vmd.FBXImporter
                             continue;
 
                         // 마지막 지지에서 골반을 내릴 이유가 없는 다리의 해제 궤적은 보존함.
-                        Vector3 targetToHip = Upper.position - _target;
-                        float reachSquared = _maximumReach * _maximumReach;
-                        float horizontalSquared = targetToHip.x * targetToHip.x + targetToHip.z * targetToHip.z;
-                        if (targetToHip.y <= 0f || horizontalSquared >= reachSquared ||
-                            targetToHip.sqrMagnitude <= reachSquared)
-                            continue;
+                        if (!NeedsPelvisLowering()) continue;
 
                         var reference = new ReleaseReference(frame, channel, contact.FirstPoint,
                             contact.Anchor, _target - _originalFootPosition, _ground);
@@ -803,10 +816,10 @@ namespace Fbx2Vmd.FBXImporter
                     !_releaseReferences.TryGetValue(Mathf.FloorToInt(frame), out ReleaseReference reference) ||
                     GetSingleSupportChannel(_activeWeights) != reference.Channel ||
                     _activeContacts[reference.Channel].FirstPoint != reference.Point ||
-                    Diagnostic.mixed_ground_collider || !MatchesReleaseGround(_ground, reference, contactLimit) ||
+                    Diagnostic.mixed_ground_collider || !MatchesReferenceGround(_ground, reference.Ground, contactLimit) ||
                     _ground.collider.transform.localToWorldMatrix != reference.GroundMatrix ||
                     !ground.TryFindGround(reference.Anchor, out RaycastHit anchorHit) ||
-                    !MatchesReleaseGround(anchorHit, reference, contactLimit))
+                    !MatchesReferenceGround(anchorHit, reference.Ground, contactLimit))
                     return false;
 
                 Vector3 shift = _originalFootPosition + reference.Correction * _support - target;
@@ -818,16 +831,16 @@ namespace Fbx2Vmd.FBXImporter
                 Vector3 candidate = target + blend * limitedShift;
                 return candidate != target &&
                     ground.TryFindGround(candidate, out RaycastHit candidateHit) &&
-                    MatchesReleaseGround(candidateHit, reference, contactLimit) &&
+                    MatchesReferenceGround(candidateHit, reference.Ground, contactLimit) &&
                     HumanoidSoleGroundConstraint.TryLiftAbovePlane(candidate, _targetFootRotation,
                         Sampler.LocalSolePoints, Foot.lossyScale.x, _ground.point, _ground.normal,
                         out releaseTarget, out _);
             }
 
-            private static bool MatchesReleaseGround(RaycastHit hit, ReleaseReference reference, float tolerance) =>
-                hit.collider != null && hit.collider == reference.Ground.collider &&
-                (hit.normal - reference.Ground.normal).sqrMagnitude <= 0.00000001f &&
-                Mathf.Abs(Vector3.Dot(hit.point - reference.Ground.point, reference.Ground.normal)) <= tolerance;
+            private static bool MatchesReferenceGround(RaycastHit hit, RaycastHit reference, float tolerance) =>
+                hit.collider != null && hit.collider == reference.collider &&
+                (hit.normal - reference.normal).sqrMagnitude <= 0.00000001f &&
+                Mathf.Abs(Vector3.Dot(hit.point - reference.point, reference.normal)) <= tolerance;
 
             internal bool TrySetReleaseTarget(Vector3 target)
             {

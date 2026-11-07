@@ -641,9 +641,10 @@ namespace Fbx2Vmd.FBXImporter
                 targetAnimator, _footContactStabilizer, clip.frameRate);
             if (_footGrounding != null)
             {
-                if (_footGrounding.TryPrepare(_footContactStabilizer.SourceSamples,
+                bool groundingPrepared = _footGrounding.TryPrepare(_footContactStabilizer.SourceSamples,
                     _footContactStabilizer.SourceHumanScale, clip, EvaluateEditorContactReference,
-                    _footContactStabilizer.IntentEstimate))
+                    _footContactStabilizer.IntentEstimate);
+                if (groundingPrepared)
                     _footGrounding.PrepareReleaseReferences(clip, EvaluateEditorContactReference, _groundResponse);
                 // goal 드라이버에 밑창 정점을 공유 — 발끝 본 스냅만으로는 회전된 발의
                 // 밑창 정점이 지면 아래로 파고드는 침투를 막지 못함. 프로브가 없으면
@@ -655,6 +656,9 @@ namespace Fbx2Vmd.FBXImporter
                     if (_footGrounding.TryGetSoleProbeLocalOffsets(false, out Vector3[] rightSole))
                         _footGoalDriver.SetSoleProbes(false, rightSole);
                 }
+                // 착지 후보 평가가 Goal에 복제한 기존 밑창 기준을 바꾸지 않도록 뒤에서 준비함.
+                if (groundingPrepared)
+                    _footGrounding.PrepareTouchdownReferences(clip, EvaluateEditorContactReference, _groundResponse);
             }
         }
 

@@ -251,6 +251,68 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ReachLimitedTouchdown_When_Seeking_Then_SmoothsWithoutChangingContact()
+        {
+            const string clipPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
+            const string modelPath = "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
+            GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(clipPath);
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+            if (source == null || asset == null) Assert.Ignore("로컬 착지 회귀 입력이 없는 환경에서는 생략함");
+            AnimationClip clip = AssetDatabase.LoadAllAssetsAtPath(clipPath).OfType<AnimationClip>()
+                .Single(c => c.humanMotion && !c.name.StartsWith("__", StringComparison.Ordinal));
+            Type type = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidMotionPlaybackController", true);
+            object controller = Activator.CreateInstance(type, true);
+            var floor = new GameObject("착지 회귀 지면") { hideFlags = HideFlags.HideAndDontSave };
+            GameObject model = null;
+            try
+            {
+                floor.AddComponent<BoxCollider>().size = new Vector3(40f, 0.1f, 40f);
+                floor.transform.position = new Vector3(0f, 2.95f, 0f);
+                model = UnityEngine.Object.Instantiate(asset);
+                model.hideFlags = HideFlags.HideAndDontSave;
+                model.transform.position = new Vector3(0f, 3f, 0f);
+                foreach (MonoBehaviour script in model.GetComponentsInChildren<MonoBehaviour>(true)) script.enabled = false;
+                Animator animator = model.GetComponentInChildren<Animator>(true);
+                Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+                Invoke(controller, "PrepareWithArmDirectionReference", animator, clip, source);
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                object grounding = Field(controller, "_footGrounding");
+                PropertyInfo suppression = grounding.GetType().GetProperty("SuppressReleaseCorrection", Flags);
+                float[] frames = Enumerable.Range(4547 * 4, 29).Select(tick => tick / 4f).ToArray();
+
+                (float height, bool[] contacts) Measure(float frame)
+                {
+                    Assert.That((bool)Invoke(controller, "Seek", frame / clip.frameRate), Is.True);
+                    Assert.That((bool)Property(grounding, "RawGatePass"), Is.True, $"f{frame}");
+                    object[] surfaces = { null, null };
+                    Assert.That((bool)Invoke(grounding, "TryCaptureCurrentSurface", surfaces), Is.True);
+                    bool[] contacts = surfaces.SelectMany(surface => new[] { "rear_distance_mm", "front_distance_mm" }
+                        .Select(name => (float)Field(surface, name) <= animator.humanScale * 0.1f)).ToArray();
+                    return (hips.position.y, contacts);
+                }
+
+                suppression.SetValue(grounding, true);
+                var baseline = frames.Select(Measure).ToArray();
+                suppression.SetValue(grounding, false);
+                var corrected = frames.Select(Measure).ToArray();
+                float MaximumDrop((float height, bool[] contacts)[] poses) =>
+                    poses.Zip(poses.Skip(1), (before, after) => before.height - after.height).Max();
+                Assert.That(MaximumDrop(corrected), Is.LessThan(MaximumDrop(baseline) - 0.0003f));
+                for (int index = frames.Length - 1; index >= 0; index--)
+                {
+                    Assert.That(corrected[index].contacts, Is.EqualTo(baseline[index].contacts), $"f{frames[index]}");
+                    Assert.That(Measure(frames[index]).height, Is.EqualTo(corrected[index].height).Within(0.00003f));
+                }
+            }
+            finally
+            {
+                ((IDisposable)controller).Dispose();
+                if (model != null) UnityEngine.Object.DestroyImmediate(model);
+                UnityEngine.Object.DestroyImmediate(floor);
+            }
+        }
+
+        [Test]
         public void Given_TwoHumanoids_When_PlaybackGroundChanges_Then_UsesSoleAndRestoresDeterministically()
         {
             Type controllerType = typeof(FBXVmdPipeline).Assembly.GetType(
