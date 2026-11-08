@@ -428,17 +428,27 @@ namespace Tests.Editor.FBXImporter
                 Vector3[] positions = bones.Select(b => b.localPosition).ToArray();
                 Vector3[] scales = bones.Select(b => b.localScale).ToArray();
                 Physics.SyncTransforms();
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                object grounding = controller.GetType().GetField("_footGrounding", flags).GetValue(controller);
+                object rightLeg = grounding.GetType().GetField("_right", flags).GetValue(grounding);
+                // 테스트가 생성한 오른다리의 굽힘 기준만 무효화해 접지 풀이 실패를 재현함.
+                rightLeg.GetType().GetField("_referenceNormal", flags)
+                    .SetValue(rightLeg, new Vector3(float.NaN, 0f, 0f));
                 float minimum = float.PositiveInfinity;
                 int fallbackCount = 0;
                 for (int frame = 3520; frame <= 3550; frame++)
                 {
                     Assert.That((bool)Invoke(controller, "SeekFrame", frame), Is.True);
-                    if (ReadProperty(controller, "LastGroundingStatus").ToString() == "Fallback")
-                        fallbackCount++;
                     object[] surface = { null, null };
                     Assert.That((bool)Invoke(controller, "TryCaptureCurrentFootSurface", surface), Is.True);
-                    float clearance = (float)surface[1].GetType()
-                        .GetField("minimum_distance_mm").GetValue(surface[1]);
+                    var surfaceType = surface[1].GetType();
+                    float clearance = (float)surfaceType.GetField("minimum_distance_mm").GetValue(surface[1]);
+                    if (ReadProperty(controller, "LastGroundingStatus").ToString() == "Fallback")
+                    {
+                        Assert.That((bool)surfaceType.GetField("has_ground").GetValue(surface[1]), Is.True,
+                            $"프레임 {frame}의 폴백 밑창 측정에는 실제 지면이 필요합니다.");
+                        fallbackCount++;
+                    }
                     Assert.That(float.IsNaN(clearance) || float.IsInfinity(clearance), Is.False);
                     minimum = Mathf.Min(minimum, clearance);
                     for (int index = 0; index < bones.Length; index++)
