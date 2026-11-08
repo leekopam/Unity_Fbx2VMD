@@ -1056,9 +1056,10 @@ namespace Tests.Editor.FBXImporter
                     ReadProperty<int>(result, "FallbackFrameCount"),
                     Is.EqualTo(20),
                     message);
+                // 원형 재붕괴·strict 위반 DQ 후보 제외 후 같은 입력에서 확인한 희소 보정 수를 고정함.
                 Assert.That(
                     ReadProperty<int>(result, "CorrectionEntryCount"),
-                    Is.EqualTo(1250467),
+                    Is.EqualTo(522446),
                     message);
             }
             finally
