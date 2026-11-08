@@ -658,7 +658,10 @@ namespace Fbx2Vmd.FBXImporter
                 }
                 // 착지 후보 평가가 Goal에 복제한 기존 밑창 기준을 바꾸지 않도록 뒤에서 준비함.
                 if (groundingPrepared)
+                {
                     _footGrounding.PrepareTouchdownReferences(clip, EvaluateEditorContactReference, _groundResponse);
+                    _footGrounding.PrepareReleaseSmoothing(clip, EvaluateEditorContactReference, _groundResponse);
+                }
             }
         }
 

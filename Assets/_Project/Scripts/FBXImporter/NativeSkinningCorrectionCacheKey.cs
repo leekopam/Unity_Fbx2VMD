@@ -17,9 +17,9 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     internal static class NativeSkinningCorrectionCacheKey
     {
-        // 보정 알고리즘·설정이 바뀌면 수동으로 올린다 — 설정은 코드 고정(static)이라
-        // 이 상수 하나가 설정 변경 전부를 대표한다.
+        // 표면 솔버와 지지 해제 계산을 독립적으로 버전 관리함.
         internal const int AlgorithmVersion = 30;
+        private const int GroundingReleaseVersion = 1;
 
         internal readonly struct RendererIdentity
         {
@@ -75,6 +75,7 @@ namespace Fbx2Vmd.FBXImporter
                 var segments = new List<string>
                 {
                     "v" + AlgorithmVersion,
+                    "grounding-release:" + GroundingReleaseVersion,
                     Application.unityVersion,
                     "motion:" + (motionName ?? string.Empty),
                     "frames:" + frameCount,
@@ -166,6 +167,7 @@ namespace Fbx2Vmd.FBXImporter
                 var segments = new List<string>
                 {
                     "v" + AlgorithmVersion,
+                    "grounding-release:" + GroundingReleaseVersion,
                     Application.unityVersion,
                     "runtime",
                     "motion:" + (motionName ?? string.Empty),

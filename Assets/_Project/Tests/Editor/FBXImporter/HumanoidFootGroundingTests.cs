@@ -15,6 +15,29 @@ namespace Tests.Editor.FBXImporter
             BindingFlags.Public | BindingFlags.NonPublic;
 
         [Test]
+        public void Given_ReleaseStepPeak_When_BuildingOffsets_Then_ReducesPeakWithoutReversingOrMovingEndpoints()
+        {
+            var targets = new[] { 0f, 4f, 14f, 40f, 65f, 83f, 96f }
+                .Select(value => Vector3.right * (value * 0.001f)).ToArray();
+            Type type = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootGrounding", true);
+            MethodInfo build = type.GetMethod("TryBuildReleaseOffsets", Flags);
+            Assert.That(build, Is.Not.Null);
+            object[] arguments = { targets, Vector3.right, 0.01f, null };
+            Assert.That((bool)build.Invoke(null, arguments), Is.True);
+            var offsets = (float[])arguments[3];
+            Assert.That(offsets.First(), Is.Zero);
+            Assert.That(offsets.Last(), Is.Zero);
+            Assert.That(offsets.All(value => Mathf.Abs(value) <= 0.010001f), Is.True);
+            for (int i = 1; i < targets.Length; i++)
+            {
+                float step = targets[i].x + offsets[i] - targets[i - 1].x - offsets[i - 1];
+                Assert.That(step, Is.InRange(0f, 0.025f));
+            }
+        }
+
+
+        [Test]
         public void Given_PlantedFrontPointChanges_When_MeasuringGrounding_Then_UsesCurrentSoleContact()
         {
             const string clipPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";

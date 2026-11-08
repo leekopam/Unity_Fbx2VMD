@@ -182,6 +182,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             IsPrepared = false;
             _touchdownWindows.Clear();
+            _releaseSmoothingWindows.Clear();
             if (samples == null || samples.Count < 2 || clip == null || evaluateReference == null ||
                 sourceHumanScale <= 0f || float.IsNaN(sourceHumanScale) || float.IsInfinity(sourceHumanScale))
                 return false;
@@ -228,7 +229,8 @@ namespace Fbx2Vmd.FBXImporter
             TryApplyCore(timeSeconds, ground, null, true, out _, out _);
 
         private bool TryApplyCore(float timeSeconds, HumanoidGroundResponse ground,
-            TouchdownWindow window, bool applyHold, out bool touchdownRejected, out TouchdownPose baselinePose)
+            TouchdownWindow window, bool applyHold, out bool touchdownRejected, out TouchdownPose baselinePose,
+            ReleaseSmoothingWindow releaseTrial = null)
         {
             touchdownRejected = false;
             baselinePose = default;
@@ -301,6 +303,14 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     if (window == null && applyHold)
                         _touchdownWindows.TryGetValue(Mathf.FloorToInt(frame), out window);
+                    if (window == null)
+                    {
+                        if (releaseTrial == null && applyHold)
+                            _releaseSmoothingWindows.TryGetValue(Mathf.FloorToInt(frame), out releaseTrial);
+                        if (releaseTrial != null && !TryApplyReleaseSmoothing(releaseTrial, frame, ground,
+                                leftTarget, rightTarget, offset, footOffsets, clearance, out touchdownRejected))
+                            return false;
+                    }
                     if (window != null && frame >= window.Start && frame < window.Full &&
                         !TryApplyTouchdown(window, ground, leftTarget, rightTarget, offset, footOffsets, out touchdownRejected))
                         return false;
@@ -750,22 +760,7 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     for (int frame = 0; frame + 1 < _weights.Length; frame++)
                     {
-                        int channel = GetSingleSupportChannel(_weights[frame]);
-                        if (channel < 0 || _weights[frame][channel] < 0.999f ||
-                            GetSingleSupportChannel(_weights[frame + 1]) != channel ||
-                            _weights[frame + 1][channel] >= 0.999f)
-                            continue;
-
-                        var contact = _plan.GetSample(channel, frame);
-                        int end = frame + 1;
-                        while (end < _weights.Length &&
-                            GetSingleSupportChannel(_weights[end]) == channel &&
-                            _weights[end][channel] < _weights[end - 1][channel] &&
-                            _plan.GetSample(channel, end).FirstPoint == contact.FirstPoint)
-                            end++;
-                        // 재획득과 접점 교체는 기존 지지 계획을 따름.
-                        if (!contact.HasValue || end == frame + 1 || end == _weights.Length ||
-                            _weights[end].x > 0f || _weights[end].y > 0f)
+                        if (!TryGetReleaseRange(frame, out int end, out int channel, out var contact))
                             continue;
 
                         evaluate(Mathf.Min(frame / frameRate, clipLength));
