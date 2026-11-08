@@ -350,14 +350,20 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
-        [TestCase(2795,
+        [TestCase(2795, 0,
             "01D445EBB3AF0376F8586B4ED30DBF388C6FF828599E7845E2CB2A751874164C",
             "BC04BEF9F4E3D74F820654D34B161CE2745A5EEA439334FA96C6CDE0C2BB6DC8")]
-        [TestCase(3580,
+        [TestCase(3580, 0,
             "AF1C680801D9E470F7809C368AF0587472A07CA84957ADAB570692EA55F9A22E",
             "D5C29529820926CC539F37B6A417F1C5D14039EEAE92635A1C62A10939BC4B97")]
+        [TestCase(5734, 2,
+            "72EE4CF513A048801F59247313D232DA1F34BB8077F94BFF9790A0CC32FC8202",
+            "C7F1B8C93CAC048C66DA036A30760285B41091BC085C476334FE849C0637B5F2")]
+        [TestCase(8245, 0,
+            "A9895C14A5F370BA38FC3D45D40D40497382008FC09E4FC9E0C650AEBE2CFA77",
+            "84049269A3D085BC0B6BC02EF85D4A3850C6F7B0C4C30668C4EA65BDC9E0CDE3")]
         public async Task Given_NativeWorkerFailureDump_When_PreparingFrame_Then_ReappliesSafeSparseCache(
-            int frame, string verticesHash, string matricesHash)
+            int frame, int failedContract, string verticesHash, string matricesHash)
         {
             string vrmPath = Path.GetFullPath(Path.Combine(Application.dataPath,
                 "../Docs/ref/ExportedProject/ExportedProject/Assets/StreamingAssets/Characters/HatsuneMikuNT.vrm"));
@@ -413,8 +419,9 @@ namespace Tests.Editor.FBXImporter
 
                 var original = (Vector3[])baseline.Clone();
                 Assert.That(NativeSkinningSurfaceCorrectionCalculator.TryCalculateStrongValidatedFrame(
-                    baseline, contracts[0], out var previous), Is.True);
-                Assert.That(NativeSkinningSurfaceCorrectionCalculator.IsWithinStrongQuality(previous, contracts[0]), Is.False);
+                    baseline, contracts[failedContract], out var previous), Is.True);
+                Assert.That(NativeSkinningSurfaceCorrectionCalculator.IsWithinStrongQuality(
+                    previous, contracts[failedContract]), Is.False);
                 Assert.That(NativeSkinningCorrectionPreprocessor.TryCreateSession(
                     1, contracts, (_, _) => baseline, null, out var session), Is.True);
                 var prepared = new NativeSkinningPreparedFrame(0,

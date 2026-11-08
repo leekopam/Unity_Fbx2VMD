@@ -88,7 +88,7 @@ namespace Fbx2Vmd.FBXImporter
     /// <summary>
     /// 스키닝된 팔 표면의 급접힘을 위치 기반 제약으로 완화함.
     /// </summary>
-    internal static class NativeSkinningSurfaceCorrectionCalculator
+    internal static partial class NativeSkinningSurfaceCorrectionCalculator
     {
         private const float RestSmoothAngleDegrees =
             NativeSkinningSurfaceDefectDetector.MaximumCorrectableRestAngleDegrees;
@@ -422,6 +422,7 @@ namespace Fbx2Vmd.FBXImporter
             var originalPairs = new HashSet<int>();
             UpdateActiveSharpFoldPairs(baselineVertices, contract, allPairs, originalPairs);
             FrameEdge[] edges = BuildFrameEdges(baselineVertices, contract);
+            NativeSkinningSurfaceCorrectionResult initial = previous;
 
             if (boneTransforms != null && TryDualQuaternionSeed(out result))
             {
@@ -460,7 +461,8 @@ namespace Fbx2Vmd.FBXImporter
                 }
                 previous = candidate;
             }
-            return false;
+            return TryProjectJointConstraints(
+                baselineVertices, contract, initial, originalPairs, recoveryPairs, edges, out result);
 
             bool TryDualQuaternionSeed(out NativeSkinningSurfaceCorrectionResult recovered)
             {
