@@ -163,7 +163,7 @@ namespace Fbx2Vmd.FBXImporter
             }
             NativeSkinningSurfaceCorrectionResult candidate = EvaluateResult(
                 baseline, corrected, contract, frameEdges, originalPairs.Count, recoveryPairs);
-            if (!IsWithinStrongQuality(candidate, contract))
+            if (!IsWithinStrongQuality(candidate, contract) || !HasDisplayStrainMargin(candidate))
             {
                 return false;
             }

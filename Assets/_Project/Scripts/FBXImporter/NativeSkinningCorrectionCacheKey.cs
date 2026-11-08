@@ -18,7 +18,7 @@ namespace Fbx2Vmd.FBXImporter
     internal static class NativeSkinningCorrectionCacheKey
     {
         // 표면 솔버와 지지 해제 계산을 독립적으로 버전 관리함.
-        internal const int AlgorithmVersion = 33;
+        internal const int AlgorithmVersion = 34;
         private const int GroundingReleaseVersion = 1;
 
         internal readonly struct RendererIdentity

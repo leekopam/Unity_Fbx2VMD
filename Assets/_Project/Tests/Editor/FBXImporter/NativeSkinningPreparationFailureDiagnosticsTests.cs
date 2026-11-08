@@ -362,8 +362,24 @@ namespace Tests.Editor.FBXImporter
         [TestCase(8245, 0,
             "A9895C14A5F370BA38FC3D45D40D40497382008FC09E4FC9E0C650AEBE2CFA77",
             "84049269A3D085BC0B6BC02EF85D4A3850C6F7B0C4C30668C4EA65BDC9E0CDE3")]
-        public async Task Given_NativeWorkerFailureDump_When_PreparingFrame_Then_ReappliesSafeSparseCache(
-            int frame, int failedContract, string verticesHash, string matricesHash)
+        public Task Given_NativeWorkerFailureDump_When_PreparingFrame_Then_ReappliesSafeSparseCache(
+            int frame, int failedContract, string verticesHash, string matricesHash) =>
+            AssertWorkerCacheQuality(frame, failedContract, verticesHash, matricesHash);
+
+        [TestCase(5726, 2,
+            "8041E7D3E520CB28D500BAF0F060D36008E7AEBC2B96BD28A755FD851B14FED3",
+            "9105876677B61DEFBDCAB26980567C6F8C40015BC6DF549932EDC375CC1E9F17",
+            "ED376B2DD60D1F302C1AC273F4C0EC6378CEB3CCD9B8C0A54FF6B735E2559C7A")]
+        [TestCase(5793, 0,
+            "42CDA69996A4D1AE9291AEAD996B15FCBF1AAAA0E3C71525181C3F6C20820169",
+            "FDB313A931D63352408837E58CBBA86F45699F99E45235B893C50F210A832193",
+            "7D05B59F12D8B92C88507B21210BE60FD7A9A4E6F6DB483E75691F7B9E552CDB")]
+        public Task Given_BakedDisplayBaseline_When_ReapplyingWorkerCache_Then_PreservesQuality(
+            int frame, int failedContract, string verticesHash, string matricesHash, string bakedHash) =>
+            AssertWorkerCacheQuality(frame, failedContract, verticesHash, matricesHash, bakedHash);
+
+        private static async Task AssertWorkerCacheQuality(
+            int frame, int failedContract, string verticesHash, string matricesHash, string bakedHash = null)
         {
             string vrmPath = Path.GetFullPath(Path.Combine(Application.dataPath,
                 "../Docs/ref/ExportedProject/ExportedProject/Assets/StreamingAssets/Characters/HatsuneMikuNT.vrm"));
@@ -375,11 +391,18 @@ namespace Tests.Editor.FBXImporter
             {
                 Assert.Ignore("등록 VRM과 워커 정점·행렬 로컬 fixture가 필요합니다.");
             }
-            foreach (var input in new[] { (verticesPath, verticesHash), (matricesPath, matricesHash) })
+            AssertFixtureHash(verticesPath, verticesHash);
+            AssertFixtureHash(matricesPath, matricesHash);
+            string bakedPath = null;
+            if (bakedHash != null)
             {
-                using var hash = SHA256.Create();
-                using var stream = File.OpenRead(input.Item1);
-                Assert.That(BitConverter.ToString(hash.ComputeHash(stream)).Replace("-", ""), Is.EqualTo(input.Item2));
+                bakedPath = Path.GetFullPath(Path.Combine(Application.dataPath,
+                    $"../Docs/Workflow/Local/evidence/product-settings-e2e/3996312b-2e53-4662-95c7-b7f0ad4ee906/f{frame}-Body-baked.bin"));
+                if (!File.Exists(bakedPath))
+                {
+                    Assert.Ignore("실제 표시 BakeMesh 정점 로컬 fixture가 필요합니다.");
+                }
+                AssertFixtureHash(bakedPath, bakedHash);
             }
 
             CharacterLoader.Result loaded = await new CharacterLoader().LoadAsync(vrmPath, CancellationToken.None);
@@ -391,16 +414,8 @@ namespace Tests.Editor.FBXImporter
                     .Select(BuildSurfaceContract).Cast<NativeSkinningSurfaceContract>()
                     .Where(contract => contract.Renderer.name == "Body").ToArray();
                 SkinnedMeshRenderer renderer = contracts[0].Renderer;
-                using var verticesReader = new BinaryReader(File.OpenRead(verticesPath));
-                int vertexCount = verticesReader.ReadInt32();
-                Assert.That(vertexCount, Is.EqualTo(renderer.sharedMesh.vertexCount));
-                Assert.That(verticesReader.BaseStream.Length, Is.EqualTo(4L + vertexCount * 12L));
-                var baseline = new Vector3[vertexCount];
-                for (int vertex = 0; vertex < vertexCount; vertex++)
-                {
-                    baseline[vertex] = new Vector3(
-                        verticesReader.ReadSingle(), verticesReader.ReadSingle(), verticesReader.ReadSingle());
-                }
+                int vertexCount = renderer.sharedMesh.vertexCount;
+                Vector3[] baseline = ReadFixtureVertices(verticesPath, vertexCount);
                 using var matricesReader = new BinaryReader(File.OpenRead(matricesPath));
                 int boneCount = matricesReader.ReadInt32();
                 Assert.That(boneCount, Is.EqualTo(renderer.bones.Length));
@@ -429,19 +444,49 @@ namespace Tests.Editor.FBXImporter
                     new Dictionary<SkinnedMeshRenderer, Matrix4x4[]> { [renderer] = matrices });
                 Assert.That(session.TryProcessPreparedFrames(new[] { prepared }), Is.True, session.FailureMessage);
                 Assert.That(session.IsComplete, Is.True);
-                Vector3[] finalVertices = (Vector3[])baseline.Clone();
-                Assert.That(session.Result.RendererCorrections.Single().Cache.TryApply(0, finalVertices, out _), Is.True);
-                foreach (NativeSkinningSurfaceContract contract in contracts)
+                NativeSkinningCorrectionCache cache = session.Result.RendererCorrections.Single().Cache;
+                AssertCacheQuality(baseline, "워커 LBS");
+                if (bakedPath != null)
                 {
-                    Assert.That(NativeSkinningSurfaceCorrectionCalculator.IsCorrectedFrameWithinStrongQuality(
-                        baseline, finalVertices, contract), Is.True, contract.Side.ToString());
+                    AssertCacheQuality(ReadFixtureVertices(bakedPath, vertexCount), "제품 BakeMesh");
                 }
                 CollectionAssert.AreEqual(original, baseline);
+
+                void AssertCacheQuality(Vector3[] source, string label)
+                {
+                    Vector3[] finalVertices = (Vector3[])source.Clone();
+                    Assert.That(cache.TryApply(0, finalVertices, out _), Is.True, label);
+                    foreach (NativeSkinningSurfaceContract contract in contracts)
+                    {
+                        Assert.That(NativeSkinningSurfaceCorrectionCalculator.IsCorrectedFrameWithinStrongQuality(
+                            source, finalVertices, contract), Is.True, $"{label} {contract.Side}");
+                    }
+                }
             }
             finally
             {
                 CharacterLoader.DestroyInstance(loaded.instance);
             }
+        }
+
+        private static void AssertFixtureHash(string path, string expectedHash)
+        {
+            using var hash = SHA256.Create();
+            using var stream = File.OpenRead(path);
+            Assert.That(BitConverter.ToString(hash.ComputeHash(stream)).Replace("-", ""), Is.EqualTo(expectedHash));
+        }
+
+        private static Vector3[] ReadFixtureVertices(string path, int vertexCount)
+        {
+            using var reader = new BinaryReader(File.OpenRead(path));
+            Assert.That(reader.ReadInt32(), Is.EqualTo(vertexCount));
+            Assert.That(reader.BaseStream.Length, Is.EqualTo(4L + vertexCount * 12L));
+            var vertices = new Vector3[vertexCount];
+            for (int index = 0; index < vertexCount; index++)
+            {
+                vertices[index] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            }
+            return vertices;
         }
 
         [TestCase("tetoris_001.fbx", 1)]

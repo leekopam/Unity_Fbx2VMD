@@ -108,6 +108,8 @@ namespace Fbx2Vmd.FBXImporter
         private const float EdgeStrainBarrierWeight = 4f;
         private const float EdgeStrainActivation = 0.015f;
         private const float EdgeLengthProjectionMargin = 0.0001f;
+        // LBS에서 저장한 희소 보정량을 BakeMesh에 적용할 때의 수치 차이를 흡수함.
+        private const float DisplayEdgeLengthStrainMargin = EdgeLengthProjectionMargin * 0.5f;
         private const float MaximumAbsoluteStep = 0.00005f;
         private const float MaximumRelativeStep = 0.02f;
         private const float QualityComparisonTolerance = 0.0000001f;
@@ -423,6 +425,7 @@ namespace Fbx2Vmd.FBXImporter
             UpdateActiveSharpFoldPairs(baselineVertices, contract, allPairs, originalPairs);
             FrameEdge[] edges = BuildFrameEdges(baselineVertices, contract);
             NativeSkinningSurfaceCorrectionResult initial = previous;
+            NativeSkinningSurfaceCorrectionResult displayRepairSeed = null;
 
             if (boneTransforms != null && TryDualQuaternionSeed(out result))
             {
@@ -447,8 +450,7 @@ namespace Fbx2Vmd.FBXImporter
                     residualPairs, false, false, edges, new SolverBuffers(), timing);
                 NativeSkinningSurfaceCorrectionResult candidate = EvaluateResult(
                     baselineVertices, corrected, contract, edges, originalPairs.Count, recoveryPairs);
-                if (IsWithinStrongQuality(candidate, contract) &&
-                    IsCorrectedFrameWithinStrongQuality(baselineVertices, candidate.CorrectedVertices, contract))
+                if (TryAcceptRetry(candidate))
                 {
                     result = candidate;
                     return true;
@@ -461,8 +463,29 @@ namespace Fbx2Vmd.FBXImporter
                 }
                 previous = candidate;
             }
-            return TryProjectJointConstraints(
+            return (displayRepairSeed != null && TryProjectJointConstraints(
+                    baselineVertices, contract, displayRepairSeed, originalPairs, recoveryPairs, edges, out result)) ||
+                TryProjectJointConstraints(
                 baselineVertices, contract, initial, originalPairs, recoveryPairs, edges, out result);
+
+            bool TryAcceptRetry(NativeSkinningSurfaceCorrectionResult candidate)
+            {
+                if (!IsWithinStrongQuality(candidate, contract) ||
+                    !IsCorrectedFrameWithinStrongQuality(baselineVertices, candidate.CorrectedVertices, contract))
+                {
+                    return false;
+                }
+                if (HasDisplayStrainMargin(candidate))
+                {
+                    return true;
+                }
+                if (displayRepairSeed == null ||
+                    candidate.MaximumEdgeLengthStrain < displayRepairSeed.MaximumEdgeLengthStrain)
+                {
+                    displayRepairSeed = candidate;
+                }
+                return false;
+            }
 
             bool TryDualQuaternionSeed(out NativeSkinningSurfaceCorrectionResult recovered)
             {
@@ -506,8 +529,7 @@ namespace Fbx2Vmd.FBXImporter
                         seedQuality.MaximumEdgeLengthStrain <= StrongConfiguration.MaximumEdgeLengthStrain &&
                         TryCalculateTimed(baselineVertices, seed, contract, StrongWideConfiguration,
                             false, true, timing, out NativeSkinningSurfaceCorrectionResult candidate) &&
-                        IsWithinStrongQuality(candidate, contract) &&
-                        IsCorrectedFrameWithinStrongQuality(baselineVertices, candidate.CorrectedVertices, contract))
+                        TryAcceptRetry(candidate))
                     {
                         recovered = candidate;
                         return true;
@@ -516,6 +538,10 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
         }
+
+        private static bool HasDisplayStrainMargin(NativeSkinningSurfaceCorrectionResult result) =>
+            result.UsedRestShapeRecovery || result.MaximumEdgeLengthStrain <=
+            StrongConfiguration.MaximumEdgeLengthStrain - DisplayEdgeLengthStrainMargin;
 
         private static bool TryCalculateStrainRestoredHeadroom(
             IReadOnlyList<Vector3> baselineVertices,
