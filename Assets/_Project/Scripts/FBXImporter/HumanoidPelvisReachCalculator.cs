@@ -8,6 +8,8 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     internal static class HumanoidPelvisReachCalculator
     {
+        internal const float DefaultDampingThresholdRadians = 2.8f;
+
         internal readonly struct Leg
         {
             internal readonly Vector3 TargetToHip;

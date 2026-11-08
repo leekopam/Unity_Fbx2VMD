@@ -2553,6 +2553,7 @@ namespace Fbx2Vmd.FBXImporter
             // 정지 발 순간이동 확산 기본 활성 — 소스 클립의 단발 불연속이 지지 발을
             // 순간이동시키는 스냅을 수 프레임에 걸쳐 완화한다.
             _humanoidMotionPlaybackController.SetFootStepDiffusion(true);
+            _humanoidMotionPlaybackController.PrepareSupportCurves(targetAnimator);
             _poseCorrectionDocument = new HumanoidPoseCorrectionDocument(
                 motionName,
                 _humanoidMotionPlaybackController.ClipFrameRate);
@@ -2626,6 +2627,7 @@ namespace Fbx2Vmd.FBXImporter
             // 정지 발 순간이동 확산 기본 활성 — 소스 클립의 단발 불연속이 지지 발을
             // 순간이동시키는 스냅을 수 프레임에 걸쳐 완화한다.
             _humanoidMotionPlaybackController.SetFootStepDiffusion(true);
+            _humanoidMotionPlaybackController.PrepareSupportCurves(targetAnimator);
             _poseCorrectionDocument = new HumanoidPoseCorrectionDocument(
                 motionName,
                 _humanoidMotionPlaybackController.ClipFrameRate);

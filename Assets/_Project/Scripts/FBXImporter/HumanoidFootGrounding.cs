@@ -985,7 +985,8 @@ namespace Fbx2Vmd.FBXImporter
                 Diagnostic.hip_to_target_m = Vector3.Distance(Upper.position, _target);
                 bool hasReach = HumanoidPelvisReachCalculator.TryCalculateExtensionReach(
                     _upperToKnee.magnitude, _kneeToFoot.magnitude, originalAngle,
-                    Diagnostic.hip_to_target_m, _support, 2.8f, out _maximumReach);
+                    Diagnostic.hip_to_target_m, _support, HumanoidPelvisReachCalculator.DefaultDampingThresholdRadians,
+                    out _maximumReach);
                 Diagnostic.damped_reach_m = _maximumReach;
                 return hasReach;
             }

@@ -18,7 +18,7 @@ namespace Fbx2Vmd.FBXImporter
     internal static class NativeSkinningCorrectionCacheKey
     {
         // 표면 솔버와 지지 해제 계산을 독립적으로 버전 관리함.
-        internal const int AlgorithmVersion = 34;
+        internal const int AlgorithmVersion = 35;
         private const int GroundingReleaseVersion = 1;
 
         internal readonly struct RendererIdentity
@@ -50,6 +50,7 @@ namespace Fbx2Vmd.FBXImporter
             GameObject sourceModelAsset,
             Animator animator,
             NativeSkinningSurfaceContract[] contracts,
+            string supportCurveIdentity,
             out byte[] keyHash,
             out string errorMessage)
         {
@@ -76,6 +77,7 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     "v" + AlgorithmVersion,
                     "grounding-release:" + GroundingReleaseVersion,
+                    "support-curve:" + supportCurveIdentity,
                     Application.unityVersion,
                     "motion:" + (motionName ?? string.Empty),
                     "frames:" + frameCount,
@@ -140,6 +142,7 @@ namespace Fbx2Vmd.FBXImporter
             float frameRate,
             Animator animator,
             NativeSkinningSurfaceContract[] contracts,
+            string supportCurveIdentity,
             out byte[] keyHash,
             out string errorMessage)
         {
@@ -168,6 +171,7 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     "v" + AlgorithmVersion,
                     "grounding-release:" + GroundingReleaseVersion,
+                    "support-curve:" + supportCurveIdentity,
                     Application.unityVersion,
                     "runtime",
                     "motion:" + (motionName ?? string.Empty),

@@ -15,7 +15,7 @@ namespace Fbx2Vmd.FBXImporter
     /// <summary>
     /// Humanoid 모션의 명시적 재생 상태와 시간을 관리함.
     /// </summary>
-    internal sealed class HumanoidMotionPlaybackController : IDisposable
+    internal sealed partial class HumanoidMotionPlaybackController : IDisposable
     {
         private readonly NativeHumanoidAnimationPlayer _player =
             new NativeHumanoidAnimationPlayer();
@@ -304,6 +304,7 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
+            _supportCurvePose?.Restore();
             _footGrounding?.RestoreAppliedPose();
             RestoreFootRotationBindings();
             _player.EvaluateAt(CurrentTimeSeconds);
@@ -344,6 +345,9 @@ namespace Fbx2Vmd.FBXImporter
 
         public void Dispose()
         {
+            _supportCurvePose?.Restore();
+            _supportCurvePose = null;
+            _supportCurves.Clear();
             _isGroundResponseEnabled = false;
             _useIkGoalFootDrive = false;
             _footGoalAlpha = 0f;
@@ -375,6 +379,7 @@ namespace Fbx2Vmd.FBXImporter
         private bool EvaluateCurrentPoseWithCorrection(bool applyFootStabilization = true)
         {
             // 원본 자세와 상체 보정 뒤에 발 접촉을 마지막으로 고정함.
+            _supportCurvePose?.Restore();
             _footGrounding?.RestoreAppliedPose();
             RestoreFootRotationBindings();
             Vector3 leftBendNormal, rightBendNormal;
@@ -458,6 +463,8 @@ namespace Fbx2Vmd.FBXImporter
             if (_useFootStepDiffusion)
                 _footStepDiffuser.TryApply(CurrentTimeSeconds, ClipFrameRate,
                     _isGroundResponseEnabled ? _groundResponse : null, _footGrounding);
+            if (isApplied && CanUseSupportCurves)
+                ApplyPreparedSupportCurve(CurrentTimeSeconds * ClipFrameRate);
             return isApplied;
         }
 
