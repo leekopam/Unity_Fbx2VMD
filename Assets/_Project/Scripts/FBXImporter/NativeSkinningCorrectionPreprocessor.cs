@@ -346,14 +346,14 @@ namespace Fbx2Vmd.FBXImporter
 
             var deltaByVertex = new Dictionary<int, Vector3>();
             var surfaceDeltaByVertex = new Dictionary<int, Vector3>();
-            NativeSkinningDualQuaternionTransform[] boneTransforms = null;
             if (!TryCalculateSurfaceCorrections(
                     frameIndex,
                     baselineVertices,
-                    work.Contracts,
-                    work.RendererName,
+                    work,
+                    boneTransformsProvider,
                     out NativeSkinningSurfaceCorrectionResult[] surfaceCorrections,
                     out bool surfaceUsedFallback,
+                    out NativeSkinningDualQuaternionTransform[] boneTransforms,
                     out errorMessage))
             {
                 return false;
@@ -474,12 +474,15 @@ namespace Fbx2Vmd.FBXImporter
         private bool TryCalculateSurfaceCorrections(
             int frameIndex,
             IReadOnlyList<Vector3> vertices,
-            NativeSkinningSurfaceContract[] contracts,
-            string rendererName,
+            RendererWork work,
+            Func<NativeSkinningDualQuaternionTransform[]> boneTransformsProvider,
             out NativeSkinningSurfaceCorrectionResult[] corrections,
             out bool usedFallback,
+            out NativeSkinningDualQuaternionTransform[] boneTransforms,
             out string errorMessage)
         {
+            NativeSkinningSurfaceContract[] contracts = work.Contracts;
+            boneTransforms = null;
             var calculatedCorrections =
                 new NativeSkinningSurfaceCorrectionResult[contracts.Length];
             corrections = calculatedCorrections;
@@ -516,6 +519,34 @@ namespace Fbx2Vmd.FBXImporter
                 });
             }
 
+            // 실패 계약만 재시도하고 같은 렌더러의 본 변환을 한 번만 준비함.
+            bool resolvedBoneTransforms = false;
+            for (int index = 0; index < contracts.Length; index++)
+            {
+                NativeSkinningSurfaceCorrectionResult previous = calculatedCorrections[index];
+                if (successByContract[index] || previous == null || previous.ResidualSharpFoldCount == 0)
+                {
+                    continue;
+                }
+
+                if (!resolvedBoneTransforms)
+                {
+                    boneTransforms = boneTransformsProvider?.Invoke();
+                    resolvedBoneTransforms = true;
+                }
+                long retryStart = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (NativeSkinningSurfaceCorrectionCalculator.TryRecoverFailedFrame(
+                        vertices, contracts[index], previous, work.RestVertices, work.BoneWeights,
+                        boneTransforms, _solverTiming, out NativeSkinningSurfaceCorrectionResult recovered))
+                {
+                    calculatedCorrections[index] = recovered;
+                    successByContract[index] = true;
+                    fallbackByContract[index] = true;
+                }
+                System.Threading.Interlocked.Add(ref _strongPathTicks,
+                    System.Diagnostics.Stopwatch.GetTimestamp() - retryStart);
+            }
+
             usedFallback = fallbackByContract.Any(value => value);
             int failedContractIndex = Array.FindIndex(
                 successByContract,
@@ -534,7 +565,7 @@ namespace Fbx2Vmd.FBXImporter
                 contracts[failedContractIndex];
             NativeSkinningSurfaceCorrectionResult failedCorrection =
                 calculatedCorrections[failedContractIndex];
-            errorMessage = $"{failure} renderer={rendererName} " +
+            errorMessage = $"{failure} renderer={work.RendererName} " +
                 $"side={failedContract.Side} contract={failedContractIndex}";
             errorMessage += " failedContractFolds=" + string.Join(",",
                 Enumerable.Range(0, contracts.Length)
@@ -546,7 +577,7 @@ namespace Fbx2Vmd.FBXImporter
                                 .ResidualSharpFoldCount.ToString())));
             TryDumpFailureBaselineVertices(
                 frameIndex,
-                rendererName,
+                work.RendererName,
                 vertices);
             if (failedCorrection != null)
             {

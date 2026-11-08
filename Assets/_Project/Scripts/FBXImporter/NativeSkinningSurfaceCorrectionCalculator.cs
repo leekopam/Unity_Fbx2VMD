@@ -119,6 +119,9 @@ namespace Fbx2Vmd.FBXImporter
         private const int CoupledBlendSearchStepCount = 32;
         private const int CoupledProjectionRoundCount = 8;
         private const int HeadroomStrainProjectionRoundCount = 8;
+        private const int ResidualFoldRetryCount = 2;
+        private const float MaximumDualQuaternionSeedDisplacement = 0.001f;
+        private static readonly float[] DualQuaternionSeedInfluences = { 0.1f, 0.25f };
         private const int OrientationSearchIterations = 24;
         private const float OrientationBarrierWeight = 4f;
         private const float OrientationActivationRatio = 0.25f;
@@ -329,6 +332,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 result = chained;
             }
+            NativeSkinningSurfaceCorrectionResult wide = null;
             if (!IsWithinQuality(result, contract, StrongConfiguration) &&
                 TryCalculateTimed(
                     baselineVertices,
@@ -338,7 +342,7 @@ namespace Fbx2Vmd.FBXImporter
                     false,
                     false,
                     timing,
-                    out NativeSkinningSurfaceCorrectionResult wide) &&
+                    out wide) &&
                 IsWithinQuality(wide, contract, StrongConfiguration))
             {
                 result = wide;
@@ -381,7 +385,134 @@ namespace Fbx2Vmd.FBXImporter
             {
                 result = restored;
             }
+            // 넓은 영역으로 접힘을 줄인 결과를 다시 풀어 같은 국소 해의 반복을 피함.
+            if (!IsWithinQuality(result, contract, StrongConfiguration) &&
+                wide != null && !wide.UsedRestShapeRecovery &&
+                wide.ResidualSharpFoldCount < result.ResidualSharpFoldCount &&
+                wide.NewSharpFoldCount == 0 && wide.NewDegenerateFaceCount == 0 &&
+                wide.ReversedFaceCount == 0 &&
+                TryCalculateTimed(
+                    baselineVertices,
+                    wide.CorrectedVertices,
+                    contract,
+                    StrongWideConfiguration,
+                    false,
+                    false,
+                    timing,
+                    out NativeSkinningSurfaceCorrectionResult reseeded) &&
+                IsWithinQuality(reseeded, contract, StrongConfiguration))
+            {
+                result = reseeded;
+            }
             return true;
+        }
+
+        internal static bool TryRecoverFailedFrame(
+            IReadOnlyList<Vector3> baselineVertices,
+            NativeSkinningSurfaceContract contract,
+            NativeSkinningSurfaceCorrectionResult previous,
+            Vector3[] restVertices,
+            BoneWeight[] boneWeights,
+            NativeSkinningDualQuaternionTransform[] boneTransforms,
+            NativeSkinningSolverTiming timing,
+            out NativeSkinningSurfaceCorrectionResult result)
+        {
+            result = null;
+            var allPairs = Enumerable.Range(0, contract.FacePairs.Length);
+            var originalPairs = new HashSet<int>();
+            UpdateActiveSharpFoldPairs(baselineVertices, contract, allPairs, originalPairs);
+            FrameEdge[] edges = BuildFrameEdges(baselineVertices, contract);
+
+            if (boneTransforms != null && TryDualQuaternionSeed(out result))
+            {
+                return true;
+            }
+
+            int[] recoveryPairs = originalPairs.Where(pairIndex =>
+                IsRestShapeRecoveryPair(baselineVertices, contract, pairIndex)).ToArray();
+            var residualPairs = new HashSet<int>();
+            for (int retry = 0; retry < ResidualFoldRetryCount; retry++)
+            {
+                residualPairs.Clear();
+                UpdateActiveCorrectionPairs(baselineVertices, previous.CorrectedVertices,
+                    contract, allPairs, false, residualPairs);
+                if (residualPairs.Count == 0)
+                {
+                    break;
+                }
+
+                Vector3[] corrected = ApplyCorrectionPass(baselineVertices,
+                    previous.CorrectedVertices.ToArray(), contract, StrongWideConfiguration,
+                    residualPairs, false, false, edges, new SolverBuffers(), timing);
+                NativeSkinningSurfaceCorrectionResult candidate = EvaluateResult(
+                    baselineVertices, corrected, contract, edges, originalPairs.Count, recoveryPairs);
+                if (IsWithinStrongQuality(candidate, contract) &&
+                    IsCorrectedFrameWithinStrongQuality(baselineVertices, candidate.CorrectedVertices, contract))
+                {
+                    result = candidate;
+                    return true;
+                }
+                if (candidate.ResidualSharpFoldCount >= previous.ResidualSharpFoldCount ||
+                    candidate.NewSharpFoldCount != 0 || candidate.NewDegenerateFaceCount != 0 ||
+                    candidate.ReversedFaceCount != 0)
+                {
+                    break;
+                }
+                previous = candidate;
+            }
+            return false;
+
+            bool TryDualQuaternionSeed(out NativeSkinningSurfaceCorrectionResult recovered)
+            {
+                recovered = null;
+                LocalWorkset workset = BuildLocalWorkset(baselineVertices, contract, originalPairs,
+                    StrongExtendedConfiguration.WorksetRingCount, edges, new SolverBuffers());
+                int[] indices = workset.ConstrainedVertices;
+                var dqVertices = new Vector3[indices.Length];
+                for (int index = 0; index < indices.Length; index++)
+                {
+                    int vertex = indices[index];
+                    if (!NativeSkinningDualQuaternionVertexCalculator.TryTransformVertex(
+                            restVertices[vertex], boneWeights[vertex], boneTransforms, out dqVertices[index]))
+                    {
+                        return false;
+                    }
+                }
+
+                var localPositions = new Vector3[indices.Length];
+                foreach (float influence in DualQuaternionSeedInfluences)
+                {
+                    Vector3[] seed = baselineVertices.ToArray();
+                    for (int index = 0; index < indices.Length; index++)
+                    {
+                        Vector3 baseline = seed[indices[index]];
+                        localPositions[index] = baseline + Vector3.ClampMagnitude(
+                            (dqVertices[index] - baseline) * influence, MaximumDualQuaternionSeedDisplacement);
+                    }
+                    ProjectEdgeLengthBounds(seed, localPositions, indices, workset.Edges,
+                        StrongConfiguration.MaximumEdgeLengthStrain - EdgeLengthProjectionMargin,
+                        StrongConfiguration.EdgeLengthProjectionIterations);
+                    for (int index = 0; index < indices.Length; index++)
+                    {
+                        seed[indices[index]] = localPositions[index];
+                    }
+
+                    // DQ는 국소 풀이의 초기값으로 쓰고 최종 품질은 원본 메시 기준으로 판정함.
+                    NativeSkinningSurfaceCorrectionResult seedQuality = EvaluateResult(
+                        baselineVertices, seed, contract, edges, originalPairs.Count, Array.Empty<int>());
+                    if (seedQuality.NewDegenerateFaceCount == 0 && seedQuality.ReversedFaceCount == 0 &&
+                        seedQuality.MaximumEdgeLengthStrain <= StrongConfiguration.MaximumEdgeLengthStrain &&
+                        TryCalculateTimed(baselineVertices, seed, contract, StrongWideConfiguration,
+                            false, true, timing, out NativeSkinningSurfaceCorrectionResult candidate) &&
+                        IsWithinStrongQuality(candidate, contract) &&
+                        IsCorrectedFrameWithinStrongQuality(baselineVertices, candidate.CorrectedVertices, contract))
+                    {
+                        recovered = candidate;
+                        return true;
+                    }
+                }
+                return false;
+            }
         }
 
         private static bool TryCalculateStrainRestoredHeadroom(

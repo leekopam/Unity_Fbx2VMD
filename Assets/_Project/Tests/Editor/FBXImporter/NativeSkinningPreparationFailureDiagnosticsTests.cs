@@ -6,6 +6,9 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Fbx2Vmd.CharacterLibrary;
 using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using UnityEditor;
@@ -283,6 +286,154 @@ namespace Tests.Editor.FBXImporter
             finally
             {
                 UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public async Task Given_VrmFailureDump_When_CorrectingSurface_Then_PassesStrictQuality()
+        {
+            string vrmPath = Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../Docs/ref/ExportedProject/ExportedProject/Assets/StreamingAssets/Characters/HatsuneMikuNT.vrm"));
+            string dumpPath = Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../Docs/Workflow/Local/evidence/jev-batch2/20261024-resume/native-replay/f2715-Body.bin"));
+            if (!File.Exists(vrmPath) || !File.Exists(dumpPath))
+            {
+                Assert.Ignore("등록 VRM과 f2715 메시 로컬 fixture가 필요합니다.");
+            }
+
+            foreach (var input in new[]
+            {
+                (path: vrmPath, hash: "F0EBCBDF5B2D4F86B123C63D4860ECF0E178E69B926C16EE01EC2F30C9D4E345"),
+                (path: dumpPath, hash: "FDA722BEA9ACC76C998E9F59C5A38D0F18150BCA0311B0AB0FBAFB721387BA96")
+            })
+            {
+                using var hash = SHA256.Create();
+                using var stream = File.OpenRead(input.path);
+                Assert.That(BitConverter.ToString(hash.ComputeHash(stream)).Replace("-", ""),
+                    Is.EqualTo(input.hash));
+            }
+
+            var loader = new CharacterLoader();
+            CharacterLoader.Result loaded = await loader.LoadAsync(vrmPath, CancellationToken.None);
+            try
+            {
+                Assert.That(loaded.success, Is.True, loaded.error);
+                Animator animator = loaded.instance.Root.GetComponent<Animator>();
+                object contract = FindAll(animator).Cast<object>().Select(BuildSurfaceContract)
+                    .Where(value => ReadProperty<SkinnedMeshRenderer>(value, "Renderer").name == "Body")
+                    .ElementAt(2);
+                Assert.That(ReadProperty<object>(contract, "Side").ToString(), Is.EqualTo("Right"));
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(contract, "Renderer");
+                using var reader = new BinaryReader(File.OpenRead(dumpPath));
+                int count = reader.ReadInt32();
+                Assert.That(count, Is.EqualTo(renderer.sharedMesh.vertexCount));
+                Assert.That(reader.BaseStream.Length, Is.EqualTo(4L + count * 12L));
+                var vertices = new Vector3[count];
+                for (int index = 0; index < count; index++)
+                {
+                    vertices[index] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                }
+
+                var original = (Vector3[])vertices.Clone();
+                Type calculator = RequireProductType("NativeSkinningSurfaceCorrectionCalculator");
+                object[] arguments = { vertices, contract, null };
+                Assert.That((bool)InvokeStatic(calculator, "TryCalculateStrongValidatedFrame", arguments), Is.True);
+                object result = arguments[2];
+                Assert.That(ReadProperty<int>(result, "InitialSharpFoldCount"), Is.EqualTo(7));
+                Assert.That(ReadProperty<int>(result, "ResidualSharpFoldCount"), Is.Zero);
+                Assert.That((bool)InvokeStatic(calculator, "IsWithinStrongQuality", new[] { result, contract }), Is.True);
+                CollectionAssert.AreEqual(original, vertices, "실패 메시의 입력 정점은 보존해야 합니다.");
+            }
+            finally
+            {
+                CharacterLoader.DestroyInstance(loaded.instance);
+            }
+        }
+
+        [TestCase(2795,
+            "01D445EBB3AF0376F8586B4ED30DBF388C6FF828599E7845E2CB2A751874164C",
+            "BC04BEF9F4E3D74F820654D34B161CE2745A5EEA439334FA96C6CDE0C2BB6DC8")]
+        [TestCase(3580,
+            "AF1C680801D9E470F7809C368AF0587472A07CA84957ADAB570692EA55F9A22E",
+            "D5C29529820926CC539F37B6A417F1C5D14039EEAE92635A1C62A10939BC4B97")]
+        public async Task Given_NativeWorkerFailureDump_When_PreparingFrame_Then_ReappliesSafeSparseCache(
+            int frame, string verticesHash, string matricesHash)
+        {
+            string vrmPath = Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../Docs/ref/ExportedProject/ExportedProject/Assets/StreamingAssets/Characters/HatsuneMikuNT.vrm"));
+            string directory = Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../Docs/Workflow/Local/evidence/product-settings-e2e/miku-native-captured-input-v31/all-failures"));
+            string verticesPath = Path.Combine(directory, $"f{frame}-Body-current-vertices.bin");
+            string matricesPath = Path.Combine(directory, $"f{frame}-Body-current-matrices.bin");
+            if (!File.Exists(vrmPath) || !File.Exists(verticesPath) || !File.Exists(matricesPath))
+            {
+                Assert.Ignore("등록 VRM과 워커 정점·행렬 로컬 fixture가 필요합니다.");
+            }
+            foreach (var input in new[] { (verticesPath, verticesHash), (matricesPath, matricesHash) })
+            {
+                using var hash = SHA256.Create();
+                using var stream = File.OpenRead(input.Item1);
+                Assert.That(BitConverter.ToString(hash.ComputeHash(stream)).Replace("-", ""), Is.EqualTo(input.Item2));
+            }
+
+            CharacterLoader.Result loaded = await new CharacterLoader().LoadAsync(vrmPath, CancellationToken.None);
+            try
+            {
+                Assert.That(loaded.success, Is.True, loaded.error);
+                Animator animator = loaded.instance.Root.GetComponent<Animator>();
+                NativeSkinningSurfaceContract[] contracts = FindAll(animator).Cast<object>()
+                    .Select(BuildSurfaceContract).Cast<NativeSkinningSurfaceContract>()
+                    .Where(contract => contract.Renderer.name == "Body").ToArray();
+                SkinnedMeshRenderer renderer = contracts[0].Renderer;
+                using var verticesReader = new BinaryReader(File.OpenRead(verticesPath));
+                int vertexCount = verticesReader.ReadInt32();
+                Assert.That(vertexCount, Is.EqualTo(renderer.sharedMesh.vertexCount));
+                Assert.That(verticesReader.BaseStream.Length, Is.EqualTo(4L + vertexCount * 12L));
+                var baseline = new Vector3[vertexCount];
+                for (int vertex = 0; vertex < vertexCount; vertex++)
+                {
+                    baseline[vertex] = new Vector3(
+                        verticesReader.ReadSingle(), verticesReader.ReadSingle(), verticesReader.ReadSingle());
+                }
+                using var matricesReader = new BinaryReader(File.OpenRead(matricesPath));
+                int boneCount = matricesReader.ReadInt32();
+                Assert.That(boneCount, Is.EqualTo(renderer.bones.Length));
+                Assert.That(matricesReader.BaseStream.Length, Is.EqualTo(4L + boneCount * 64L));
+                var matrices = new Matrix4x4[boneCount];
+                for (int bone = 0; bone < boneCount; bone++)
+                {
+                    for (int row = 0; row < 4; row++)
+                    {
+                        for (int column = 0; column < 4; column++)
+                        {
+                            matrices[bone][row, column] = matricesReader.ReadSingle();
+                        }
+                    }
+                }
+
+                var original = (Vector3[])baseline.Clone();
+                Assert.That(NativeSkinningSurfaceCorrectionCalculator.TryCalculateStrongValidatedFrame(
+                    baseline, contracts[0], out var previous), Is.True);
+                Assert.That(NativeSkinningSurfaceCorrectionCalculator.IsWithinStrongQuality(previous, contracts[0]), Is.False);
+                Assert.That(NativeSkinningCorrectionPreprocessor.TryCreateSession(
+                    1, contracts, (_, _) => baseline, null, out var session), Is.True);
+                var prepared = new NativeSkinningPreparedFrame(0,
+                    new Dictionary<SkinnedMeshRenderer, Vector3[]> { [renderer] = baseline },
+                    new Dictionary<SkinnedMeshRenderer, Matrix4x4[]> { [renderer] = matrices });
+                Assert.That(session.TryProcessPreparedFrames(new[] { prepared }), Is.True, session.FailureMessage);
+                Assert.That(session.IsComplete, Is.True);
+                Vector3[] finalVertices = (Vector3[])baseline.Clone();
+                Assert.That(session.Result.RendererCorrections.Single().Cache.TryApply(0, finalVertices, out _), Is.True);
+                foreach (NativeSkinningSurfaceContract contract in contracts)
+                {
+                    Assert.That(NativeSkinningSurfaceCorrectionCalculator.IsCorrectedFrameWithinStrongQuality(
+                        baseline, finalVertices, contract), Is.True, contract.Side.ToString());
+                }
+                CollectionAssert.AreEqual(original, baseline);
+            }
+            finally
+            {
+                CharacterLoader.DestroyInstance(loaded.instance);
             }
         }
 
